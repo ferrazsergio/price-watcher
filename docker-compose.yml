@@ -1,7 +1,9 @@
 version: "3.8"
 services:
-  db:
+  # Database
+  postgres:
     image: postgres:15
+    container_name: price-watcher-postgres
     environment:
       POSTGRES_DB: pricewatcher
       POSTGRES_USER: postgres
@@ -10,17 +12,187 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-  app:
-    build: .
+    networks:
+      - price-watcher-network
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: price-watcher-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - price-watcher-network
+
+  # RabbitMQ for messaging
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: price-watcher-rabbitmq
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/pricewatcher
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
-      TWILIO_ACCOUNT_SID: dummy
-      TWILIO_AUTH_TOKEN: dummy
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    networks:
+      - price-watcher-network
+
+  # API Gateway
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: price-watcher-api-gateway
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CLOUD_GATEWAY_ROUTES[0]_ID: user-service
+      SPRING_CLOUD_GATEWAY_ROUTES[0]_URI: http://user-service:8081
+      SPRING_CLOUD_GATEWAY_ROUTES[0]_PREDICATES[0]: Path=/api/users/**
+      SPRING_CLOUD_GATEWAY_ROUTES[1]_ID: product-service
+      SPRING_CLOUD_GATEWAY_ROUTES[1]_URI: http://product-service:8082
+      SPRING_CLOUD_GATEWAY_ROUTES[1]_PREDICATES[0]: Path=/api/products/**
+      SPRING_CLOUD_GATEWAY_ROUTES[2]_ID: notification-service
+      SPRING_CLOUD_GATEWAY_ROUTES[2]_URI: http://notification-service:8084
+      SPRING_CLOUD_GATEWAY_ROUTES[2]_PREDICATES[0]: Path=/api/notifications/**
     ports:
       - "8080:8080"
     depends_on:
-      - db
+      - redis
+      - rabbitmq
+    networks:
+      - price-watcher-network
+
+  # User Service
+  user-service:
+    build: ./services/user-service
+    container_name: price-watcher-user-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pricewatcher
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - price-watcher-network
+
+  # Product Service
+  product-service:
+    build: ./services/product-service
+    container_name: price-watcher-product-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pricewatcher
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+    ports:
+      - "8082:8082"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - price-watcher-network
+
+  # Price Monitor Service
+  price-monitor-service:
+    build: ./services/price-monitor-service
+    container_name: price-watcher-price-monitor-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pricewatcher
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+    ports:
+      - "8083:8083"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - price-watcher-network
+
+  # Notification Service
+  notification-service:
+    build: ./services/notification-service
+    container_name: price-watcher-notification-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      SPRING_MAIL_HOST: mailhog
+      SPRING_MAIL_PORT: 1025
+    ports:
+      - "8084:8084"
+    depends_on:
+      - redis
+      - rabbitmq
+      - mailhog
+    networks:
+      - price-watcher-network
+
+  # Analytics Service
+  analytics-service:
+    build: ./services/analytics-service
+    container_name: price-watcher-analytics-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pricewatcher
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+    ports:
+      - "8085:8085"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - price-watcher-network
+
+  # MailHog for email testing
+  mailhog:
+    image: mailhog/mailhog
+    container_name: price-watcher-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - price-watcher-network
+
 volumes:
   pgdata:
+  redisdata:
+  rabbitmqdata:
+
+networks:
+  price-watcher-network:
+    driver: bridge
