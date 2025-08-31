@@ -26,6 +26,9 @@
 		<module>services/api-gateway</module>
 		<module>services/user-service</module>
 		<module>services/product-service</module>
+		<module>services/price-monitor-service</module>
+		<module>services/notification-service</module>
+		<module>services/analytics-service</module>
 	</modules>
 
 	<dependencyManagement>
