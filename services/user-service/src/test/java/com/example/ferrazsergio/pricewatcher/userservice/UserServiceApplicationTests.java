@@ -1,4 +1,4 @@
-package com.example.ferrazsergio.pricewatcher;
+package com.example.ferrazsergio.pricewatcher.userservice;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -6,7 +6,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class PricewatcherApplicationTests {
+class UserServiceApplicationTests {
 
 	@Test
 	void contextLoads() {
