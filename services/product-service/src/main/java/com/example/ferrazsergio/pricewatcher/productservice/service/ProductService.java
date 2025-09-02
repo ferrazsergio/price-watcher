@@ -17,9 +17,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static com.example.ferrazsergio.pricewatcher.events.config.RabbitMQConfig.*;
 
@@ -184,6 +186,46 @@ public class ProductService {
 
     public long getUserPriceAchievedCount(Long userId) {
         return productRepository.countByUserIdAndPriceAchieved(userId);
+    }
+
+    // Methods for price monitor service
+
+    public List<ProductResponse> getAllActiveProducts() {
+        return productRepository.findByStatusAndActive(Product.ProductStatus.ACTIVE, true)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Transactional
+    public void updateCurrentPrice(Long productId, Map<String, Object> priceUpdate) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
+        
+        if (priceUpdate.containsKey("currentPrice")) {
+            BigDecimal currentPrice = new BigDecimal(priceUpdate.get("currentPrice").toString());
+            product.setCurrentPrice(currentPrice);
+            product.setLastCheckedAt(LocalDateTime.now());
+            productRepository.save(product);
+            log.debug("Updated current price for product {}: {}", productId, currentPrice);
+        }
+    }
+
+    @Transactional
+    public void updateProductError(Long productId, Map<String, Object> errorUpdate) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
+        
+        if (errorUpdate.containsKey("error")) {
+            product.setLastError(errorUpdate.get("error").toString());
+        }
+        
+        if (errorUpdate.containsKey("lastCheckedAt")) {
+            product.setLastCheckedAt(LocalDateTime.now());
+        }
+        
+        productRepository.save(product);
+        log.debug("Updated error information for product {}", productId);
     }
 
     private ProductResponse mapToResponse(Product product) {

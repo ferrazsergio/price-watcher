@@ -40,6 +40,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p WHERE p.status = 'ACTIVE' AND p.active = true")
     List<Product> findActiveProductsForMonitoring();
     
+    List<Product> findByStatusAndActive(Product.ProductStatus status, boolean active);
+    
     List<Product> findByStore(Product.SupportedStore store);
     
     long countByUserId(Long userId);

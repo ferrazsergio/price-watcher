@@ -156,6 +156,32 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(stats));
     }
 
+    // API endpoints for price monitor service
+
+    @GetMapping("/active")
+    public ResponseEntity<List<ProductResponse>> getActiveProducts() {
+        List<ProductResponse> activeProducts = productService.getAllActiveProducts();
+        return ResponseEntity.ok(activeProducts);
+    }
+
+    @PatchMapping("/{id}/current-price")
+    public ResponseEntity<Void> updateCurrentPrice(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> priceUpdate) {
+        
+        productService.updateCurrentPrice(id, priceUpdate);
+        return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/{id}/error")
+    public ResponseEntity<Void> updateProductError(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> errorUpdate) {
+        
+        productService.updateProductError(id, errorUpdate);
+        return ResponseEntity.ok().build();
+    }
+
     private Long getUserId(Authentication authentication) {
         if (authentication != null && authentication.getPrincipal() instanceof UserDetails userDetails) {
             // In a real implementation, you would extract the user ID from the UserDetails
